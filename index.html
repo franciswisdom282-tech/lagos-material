@@ -1,1 +1,311 @@
 
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lagos Material | Marketplace</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{--green:#087a43;--bg:#f4f7f5;--text:#17231c}
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial,sans-serif;background:var(--bg);color:var(--text)}
+header{background:white;padding:14px;position:sticky;top:0;z-index:5;border-bottom:1px solid #ddd}
+.brand{display:flex;align-items:center;gap:9px;font-size:20px;font-weight:bold;color:var(--green);margin-bottom:12px}
+.flag{width:30px;height:30px;border-radius:50%;border:1px solid #ddd;background:linear-gradient(90deg,#008751 33%,white 33%,white 66%,#008751 66%)}
+.search{display:flex;gap:6px}
+input,select,textarea,button{font:inherit;padding:11px;border:1px solid #ddd;border-radius:9px}
+.search input{min-width:0;flex:1}
+button{cursor:pointer;background:var(--green);color:white;border:0}
+button.secondary{background:#e5f2e9;color:var(--green)}
+main{max-width:850px;margin:auto;padding:14px;padding-bottom:90px}
+h2{font-size:20px}
+.banner{background:#075b36;color:white;padding:22px;border-radius:15px;margin:8px 0 20px}
+.banner h1{margin:0 0 8px;font-size:25px}
+.categories,.products{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.category,.card,.panel{background:white;border-radius:13px;padding:12px;border:1px solid #e5e9e6}
+.category{font-weight:bold;text-align:center}
+.card img{width:100%;height:145px;object-fit:cover;border-radius:9px;background:#edf1ee}
+.price{font-weight:bold;color:var(--green);font-size:18px}
+.muted{color:#66736b;font-size:13px}
+.stack{display:grid;gap:10px}
+.stack input,.stack textarea,.stack select{width:100%;background:white}
+nav{position:fixed;bottom:0;left:0;right:0;z-index:10;background:white;border-top:1px solid #ddd;display:grid;grid-template-columns:repeat(4,1fr);padding:8px 3px calc(8px + env(safe-area-inset-bottom))}
+nav button{background:white;color:#46524a;border-radius:8px;padding:7px 2px;font-size:12px}
+nav button.active{color:var(--green);font-weight:bold}
+nav span{display:block;font-size:21px;margin-bottom:3px}
+.hidden{display:none!important}
+.item{padding:12px 0;border-bottom:1px solid #e4e9e5}
+.chatbox{height:42vh;overflow:auto;background:white;padding:12px;border-radius:10px}
+.bubble{padding:10px;margin:8px 0;border-radius:10px;background:#edf2ee;max-width:85%;overflow-wrap:anywhere}
+.bubble.mine{margin-left:auto;background:#d7f5df}
+label{font-size:14px;font-weight:bold}
+@media(min-width:600px){.categories{grid-template-columns:repeat(4,1fr)}.products{grid-template-columns:repeat(3,minmax(0,1fr))}}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><div class="flag" aria-label="Nigeria flag"></div>Lagos Material</div>
+  <div class="search">
+    <input id="search" placeholder="Search materials..." aria-label="Search materials">
+    <button class="secondary" onclick="document.getElementById('photoSearch').click()" title="Choose a photo">📷</button>
+    <button class="secondary" onclick="voiceSearch()" title="Voice search">🎙️</button>
+    <input id="photoSearch" type="file" accept="image/*" capture="environment" hidden onchange="photoSelected(event)">
+  </div>
+  <div id="searchNote" class="muted"></div>
+</header>
+
+<main>
+<section id="home">
+  <div class="banner">
+    <h1>Find Materials. Connect Suppliers.</h1>
+    <div>Discover materials and suppliers across Lagos.</div>
+  </div>
+  <h2>Popular Material</h2>
+  <div class="categories">
+    <div class="category">🟢 PVC Rolls</div>
+    <div class="category">🚪 Building Materials</div>
+    <div class="category">🧵 Machines</div>
+    <div class="category">🪡 Fabrics</div>
+  </div>
+  <h2>Available Products</h2>
+  <div id="products" class="products"><p>Loading products...</p></div>
+</section>
+
+<section id="sell" class="hidden">
+  <h2>Sell a Material</h2>
+  <div id="sellNotice" class="muted">Sign in with a supplier account to list products.</div>
+  <form id="productForm" class="panel stack">
+    <label>Material name<input name="name" required maxlength="120" placeholder="e.g. PVC roll"></label>
+    <label>Category<select name="category" required>
+      <option value="PVC">PVC</option><option value="Building Materials">Building Materials</option><option value="Machines">Machines</option><option value="Fabrics">Fabrics</option><option value="Other">Other</option>
+    </select></label>
+    <label>Price in ₦<input name="price" type="number" min="0" step="0.01" required></label>
+    <label>Location<input name="location" required placeholder="e.g. Ikeja, Lagos"></label>
+    <label>Description<textarea name="description" rows="3" required></textarea></label>
+    <label>Product photo — gallery or camera<input name="image" type="file" accept="image/*" capture="environment"></label>
+    <button type="submit">Publish Product</button>
+  </form>
+</section>
+
+<section id="messages" class="hidden">
+  <h2>Messages</h2>
+  <div id="conversationList" class="panel">Sign in to see your conversations.</div>
+  <div id="chat" class="hidden panel stack">
+    <h3 id="chatTitle">Product chat</h3>
+    <div id="chatbox" class="chatbox"></div>
+    <form id="messageForm" class="search">
+      <input name="body" required maxlength="4000" placeholder="Write a message...">
+      <button>Send</button>
+    </form>
+  </div>
+</section>
+
+<section id="profile" class="hidden">
+  <h2>My Profile</h2>
+  <div id="accountInfo" class="panel">Not signed in.</div>
+  <form id="authForm" class="panel stack">
+    <h3>Register or Sign In</h3>
+    <label>Full name<input name="full_name" autocomplete="name" placeholder="Your full name"></label>
+    <label>Phone<input name="phone" type="tel" autocomplete="tel" placeholder="Phone number"></label>
+    <label>Email<input name="email" type="email" required autocomplete="email"></label>
+    <label>Password<input name="password" type="password" required minlength="6" autocomplete="current-password"></label>
+    <label>Account type<select name="role"><option value="customer">Buyer</option><option value="supplier">Supplier</option></select></label>
+    <button type="submit">Register</button>
+    <button type="button" class="secondary" onclick="signIn()">Sign In</button>
+    <button type="button" class="secondary" onclick="signOut()">Sign Out</button>
+  </form>
+</section>
+</main>
+
+<nav>
+  <button class="active" data-page="home"><span>⌂</span>Home</button>
+  <button data-page="sell"><span>＋</span>Sell</button>
+  <button data-page="messages"><span>☏</span>Messages</button>
+  <button data-page="profile"><span>♙</span>My Profile</button>
+</nav>
+
+<script>
+const SUPABASE_URL = "https://xijvlrzivnfgkmdsnxzd.supabase.co";
+const SUPABASE_KEY = "sb_publishable_o0zZyHAdcpb01TL6yHFFvA_kuzWe9Tc";
+const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+let currentUser = null;
+let currentProfile = null;
+let activeConversation = null;
+let activeProduct = null;
+let messageChannel = null;
+let searchTerm = "";
+
+const $ = id => document.getElementById(id);
+const escapeHTML = s => String(s ?? "").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const naira = n => "₦" + Number(n || 0).toLocaleString("en-NG");
+function note(id,msg){$(id).textContent=msg}
+function errorMessage(e){return e?.message || String(e)}
+function isSupplier(){return currentProfile?.role === "supplier"}
+
+async function loadProfile(){
+  const {data:{user}} = await db.auth.getUser();
+  currentUser=user;
+  currentProfile=null;
+  if(user){
+    const {data,error}=await db.from("lm_profiles").select("*").eq("id",user.id).maybeSingle();
+    if(error) console.error("Profile read:",error.message);
+    currentProfile=data;
+  }
+  renderAccount();
+}
+function renderAccount(){
+  if(!currentUser){$("accountInfo").textContent="Not signed in. Register or sign in below.";return}
+  $("accountInfo").innerHTML=`<b>${escapeHTML(currentProfile?.full_name || currentUser.email)}</b><p>${escapeHTML(currentProfile?.phone || "")}</p><p>Account: ${escapeHTML(currentProfile?.role || "profile incomplete")}</p><p class="muted">${escapeHTML(currentUser.email)}</p>`;
+  note("sellNotice",isSupplier()?"Add a product to your marketplace listing.":"Only supplier accounts can publish products.");
+}
+function showPage(page){
+  ["home","sell","messages","profile"].forEach(p=>$(p).classList.toggle("hidden",p!==page));
+  document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("active",b.dataset.page===page));
+  if(page==="home")loadProducts();
+  if(page==="messages")loadConversations();
+  if(page==="profile")renderAccount();
+}
+document.querySelectorAll("nav button").forEach(b=>b.addEventListener("click",()=>showPage(b.dataset.page)));
+
+async function loadProducts(){
+  const container=$("products");
+  container.innerHTML="<p>Loading products...</p>";
+  let q=db.from("lm_products").select("id,seller_id,name,description,category,price,location,image_url,created_at").eq("is_active",true).order("created_at",{ascending:false}).limit(100);
+  if(searchTerm)q=q.or(`name.ilike.%${searchTerm.replace(/[%_,]/g," ")}%,description.ilike.%${searchTerm.replace(/[%_,]/g," ")}%,category.ilike.%${searchTerm.replace(/[%_,]/g," ")}%`);
+  const {data,error}=await q;
+  if(error){container.textContent="Could not load products. Check your Supabase product read policy.";console.error(error);return}
+  if(!data?.length){container.textContent=searchTerm?"No matching products found.":"No products available yet. Suppliers can add the first listing.";return}
+  container.innerHTML=data.map(p=>`<article class="card">
+    ${p.image_url?`<img src="${escapeHTML(p.image_url)}" alt="${escapeHTML(p.name)}" loading="lazy">`:`<div style="height:145px;display:grid;place-items:center;background:#edf1ee;border-radius:9px">📦</div>`}
+    <h3>${escapeHTML(p.name)}</h3><div class="price">${naira(p.price)}</div>
+    <div class="muted">${escapeHTML(p.category)} · ${escapeHTML(p.location)}</div>
+    <p>${escapeHTML(p.description)}</p>
+    <button onclick="contactSupplier('${p.id}')">Message Supplier</button>
+  </article>`).join("");
+}
+$("search").addEventListener("input",e=>{searchTerm=e.target.value.trim();loadProducts()});
+
+function voiceSearch(){
+  const Speech=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!Speech){note("searchNote","Voice search isn't supported in this browser. Please type your search.");return}
+  const rec=new Speech();rec.lang="en-NG";rec.onresult=e=>{$("search").value=e.results[0][0].transcript;searchTerm=$("search").value.trim();loadProducts()};rec.onerror=()=>note("searchNote","Voice search failed. You can type your search instead.");rec.start();
+}
+function photoSelected(e){
+  const file=e.target.files?.[0];if(!file)return;
+  note("searchNote","Photo selected: "+file.name+". Visual product matching requires an image-search service; use the product search for now.");
+}
+
+$("authForm").addEventListener("submit",async e=>{
+  e.preventDefault();const f=e.currentTarget;const v=Object.fromEntries(new FormData(f));
+  const {data,error}=await db.auth.signUp({email:v.email,password:v.password,options:{data:{full_name:v.full_name,phone:v.phone,role:v.role}}});
+  if(error){alert(error.message);return}
+  if(!data.user){alert("Check your email to complete registration.");return}
+  currentUser=data.user;
+  if(data.session){
+    const {error:pe}=await db.from("lm_profiles").upsert({id:data.user.id,full_name:v.full_name,phone:v.phone,role:v.role},{onConflict:"id"});
+    if(pe)alert("Account created, but profile saving failed: "+pe.message);
+    await loadProfile();
+  }
+  alert(data.session?"Account created.":"Registration submitted. Check your email to confirm your account, then sign in.");
+});
+async function signIn(){
+  const f=$("authForm"),v=Object.fromEntries(new FormData(f));
+  const {data,error}=await db.auth.signInWithPassword({email:v.email,password:v.password});
+  if(error){alert(error.message);return}
+  currentUser=data.user;
+  if(v.full_name||v.phone||v.role){
+    const {error:pe}=await db.from("lm_profiles").upsert({id:data.user.id,full_name:v.full_name||"",phone:v.phone||"",role:v.role||"customer"},{onConflict:"id"});
+    if(pe)console.error(pe);
+  }
+  await loadProfile();alert("Signed in successfully.");showPage("profile");
+}
+async function signOut(){
+  const {error}=await db.auth.signOut();if(error){alert(error.message);return}
+  currentUser=null;currentProfile=null;activeConversation=null;renderAccount();showPage("home");alert("Signed out.");
+}
+db.auth.onAuthStateChange(async()=>{await loadProfile()});
+
+$("productForm").addEventListener("submit",async e=>{
+  e.preventDefault();
+  if(!currentUser){alert("Please sign in first.");showPage("profile");return}
+  if(!isSupplier()){alert("Please sign in with a supplier account.");return}
+  const f=e.currentTarget,v=Object.fromEntries(new FormData(f));
+  let image_url=null;const file=f.elements.image.files[0];
+  if(file){
+    if(!file.type.startsWith("image/")){alert("Please select an image.");return}
+    if(file.size>8*1024*1024){alert("Image must be under 8 MB.");return}
+    const ext=(file.name.split(".").pop()||"jpg").replace(/[^a-zA-Z0-9]/g,"");
+    const path=`${currentUser.id}/${crypto.randomUUID()}.${ext}`;
+    const {error:upError}=await db.storage.from("lm-product-images").upload(path,file,{contentType:file.type,upsert:false});
+    if(upError){alert("Photo upload failed. Check that the lm-product-images bucket exists and supplier upload policies are configured. "+upError.message);return}
+    image_url=db.storage.from("lm-product-images").getPublicUrl(path).data.publicUrl;
+  }
+  const {error}=await db.from("lm_products").insert({seller_id:currentUser.id,name:v.name,description:v.description,category:v.category,price:Number(v.price),location:v.location,image_url,is_active:true});
+  if(error){alert("Could not publish product: "+error.message);return}
+  alert("Product published.");f.reset();showPage("home");
+});
+
+async function contactSupplier(productId){
+  if(!currentUser){alert("Please sign in as a buyer to message a supplier.");showPage("profile");return}
+  const {data:p,error:pe}=await db.from("lm_products").select("*").eq("id",productId).single();
+  if(pe||!p){alert("Product not found.");return}
+  if(p.seller_id===currentUser.id){alert("You cannot message yourself about your own product.");return}
+  if(currentProfile?.role==="supplier"){alert("Sign in with a buyer account to contact suppliers.");return}
+  const {data:existing,error:findError}=await db.from("lm_conversations").select("id").eq("customer_id",currentUser.id).eq("supplier_id",p.seller_id).eq("product_id",p.id).limit(1);
+  if(findError){alert("Could not check conversations: "+findError.message);return}
+  let conversation=existing?.[0];
+  if(!conversation){
+    const {data,error}=await db.from("lm_conversations").insert({customer_id:currentUser.id,supplier_id:p.seller_id,product_id:p.id}).select("id").single();
+    if(error){alert("Could not start chat. Check conversation table RLS policies. "+error.message);return}
+    conversation=data;
+  }
+  activeProduct=p;activeConversation=conversation.id;showPage("messages");await openChat();
+}
+async function loadConversations(){
+  if(!currentUser){$("conversationList").textContent="Sign in to view your conversations.";return}
+  const {data,error}=await db.from("lm_conversations").select("id,customer_id,supplier_id,product_id,created_at").or(`customer_id.eq.${currentUser.id},supplier_id.eq.${currentUser.id}`).order("created_at",{ascending:false});
+  if(error){$("conversationList").textContent="Could not load conversations. Check messaging RLS policies.";console.error(error);return}
+  if(!data?.length){$("conversationList").textContent="No conversations yet. Message a supplier from a product listing.";return}
+  const ids=[...new Set(data.map(c=>c.product_id))];
+  const {data:products}=await db.from("lm_products").select("id,name").in("id",ids);
+  const map=Object.fromEntries((products||[]).map(p=>[p.id,p.name]));
+  $("conversationList").innerHTML=data.map(c=>`<div class="item"><b>${escapeHTML(map[c.product_id]||"Product conversation")}</b><p class="muted">${c.customer_id===currentUser.id?"Buyer":"Supplier"} conversation</p><button onclick="selectConversation('${c.id}','${c.product_id}')">Open Chat</button></div>`).join("");
+}
+async function selectConversation(id,productId){
+  activeConversation=id;
+  const {data}=await db.from("lm_products").select("*").eq("id",productId).maybeSingle();
+  activeProduct=data;await openChat();
+}
+async function openChat(){
+  $("chat").classList.remove("hidden");
+  $("chatTitle").textContent=activeProduct?.name||"Product chat";
+  await loadMessages();
+  if(messageChannel)await db.removeChannel(messageChannel);
+  messageChannel=db.channel("chat-"+activeConversation).on("postgres_changes",{event:"INSERT",schema:"public",table:"lm_messages",filter:"conversation_id=eq."+activeConversation},payload=>{
+    if(payload.new.sender_id!==currentUser?.id)appendMessage(payload.new);
+  }).subscribe();
+}
+function appendMessage(m){
+  const box=$("chatbox");const div=document.createElement("div");div.className="bubble"+(m.sender_id===currentUser?.id?" mine":"");div.textContent=m.body;box.appendChild(div);box.scrollTop=box.scrollHeight;
+}
+async function loadMessages(){
+  const box=$("chatbox");box.replaceChildren();
+  const {data,error}=await db.from("lm_messages").select("*").eq("conversation_id",activeConversation).order("created_at",{ascending:true}).limit(300);
+  if(error){box.textContent="Could not load messages. Check message read policies.";return}
+  (data||[]).forEach(appendMessage);
+}
+$("messageForm").addEventListener("submit",async e=>{
+  e.preventDefault();if(!currentUser||!activeConversation)return;
+  const input=e.currentTarget.elements.body;const body=input.value.trim();if(!body)return;
+  const {data,error}=await db.from("lm_messages").insert({conversation_id:activeConversation,sender_id:currentUser.id,body}).select("*").single();
+  if(error){alert("Message failed to send. Check message insert policies. "+error.message);return}
+  appendMessage(data);input.value="";
+});
+
+(async()=>{await loadProfile();await loadProducts()})();
+</script>
+</body>
+</html>
+
